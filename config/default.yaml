@@ -1,0 +1,45 @@
+providers:
+  llm:
+    provider: openai
+    model: gpt-4o-mini
+  stt:
+    provider: openai
+    model: whisper-1
+  tts:
+    provider: openai
+    voice: nova
+  embeddings:
+    provider: openai
+    model: text-embedding-3-small
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  format: int16
+  chunk_duration_ms: 100
+  input_device: null   # null = system default
+  output_device: null
+
+activation:
+  mode: vad
+  vad:
+    volume_threshold: 0.02
+    silence_duration_ms: 1500
+    min_speech_duration_ms: 300
+    sample_window_ms: 50
+
+avatar:
+  face_pack: default
+  resolution: [800, 600]
+  fps: 30
+
+error_handling:
+  max_retries: 3
+  retry_delay_ms: 1000
+  timeout_ms: 30000
+  fallback_message: "Sorry, I'm having connection issues. Please try again."
+
+persona:
+  name: "Assistant"
+  system_prompt: |
+    You are a friendly assistant. Keep responses concise and conversational.

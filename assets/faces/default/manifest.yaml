@@ -1,0 +1,10 @@
+name: "Default Programmatic"
+version: "1.0"
+author: "Rostro"
+type: programmatic
+
+colors:
+  face: "#FFE4C4"
+  eyes: "#333333"
+  mouth: "#CC6666"
+  background: "#2D2D2D"
