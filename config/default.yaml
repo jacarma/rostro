@@ -13,7 +13,7 @@ providers:
     model: text-embedding-3-small
 
 audio:
-  sample_rate: 16000
+  sample_rate: 24000
   channels: 1
   format: int16
   chunk_duration_ms: 100
