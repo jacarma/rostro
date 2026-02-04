@@ -1,6 +1,5 @@
 """Programmatic (procedural) face rendering."""
 
-
 import pygame
 
 from rostro.avatar.face_pack import FaceColors

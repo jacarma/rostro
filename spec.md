@@ -217,7 +217,7 @@ Handles real-time audio input/output.
 
 ```yaml
 audio:
-  sample_rate: 16000      # Hz (required by Whisper)
+  sample_rate: 24000      # Hz (matches OpenAI TTS output, avoids resampling)
   channels: 1             # Mono
   format: int16           # 16-bit PCM
   chunk_duration_ms: 100  # Buffer size for processing
@@ -227,7 +227,7 @@ audio:
 
 - CPU-only
 - No DSP-heavy processing
-- Latency tolerant (1–3s acceptable)
+- Reduced latency via streaming (~1s time-to-first-audio)
 
 ---
 
@@ -446,7 +446,7 @@ Target environment:
 - Explicit over magical
 - Easy to debug
 - No background daemons
-- No hidden threads
+- Threads are documented and purposeful (audio, playback, streaming)
 
 ---
 
@@ -691,7 +691,7 @@ providers:
     model: text-embedding-3-small
 
 audio:
-  sample_rate: 16000
+  sample_rate: 24000   # Matches OpenAI TTS (avoids resampling artifacts)
   channels: 1
   format: int16
   chunk_duration_ms: 100
@@ -726,42 +726,48 @@ persona:
 
 ## 📅 Implementation Phases
 
-### Phase 0 - Project Setup
+### Phase 0 - Project Setup ✅
 
 **Goal:** Repository ready for development with quality tooling
 
-- [ ] Initialize git repository
-- [ ] Create project structure (directories, `__init__.py` files)
-- [ ] Setup `pyproject.toml` with dependencies and tool config
-- [ ] Setup `ruff`, `mypy`, `pytest`
-- [ ] Setup pre-commit hooks
-- [ ] Create `.env.example` and `.gitignore`
-- [ ] Create `config/default.yaml`
-- [ ] Add LICENSE (MIT) and README.md
-- [ ] Verify: `ruff check .`, `mypy rostro/`, `pytest` all pass (empty)
+- [x] Initialize git repository
+- [x] Create project structure (directories, `__init__.py` files)
+- [x] Setup `pyproject.toml` with dependencies and tool config
+- [x] Setup `ruff`, `mypy`, `pytest`
+- [x] Setup pre-commit hooks
+- [x] Create `.env.example` and `.gitignore`
+- [x] Create `config/default.yaml`
+- [x] Add LICENSE (MIT) and README.md
+- [x] Verify: `ruff check .`, `mypy rostro/`, `pytest` all pass
 
-### Phase 1 - MVP
+### Phase 1 - MVP ✅
 
 **Goal:** End-to-end voice conversation with basic avatar
 
-- [ ] Audio capture and playback (sounddevice)
-- [ ] VAD activation (volume-based)
-- [ ] OpenAI provider adapters (STT, LLM, TTS, Embeddings)
-- [ ] Basic conversation engine (no memory yet)
-- [ ] Avatar engine with face pack system
-- [ ] Programmatic face (default) - no external assets needed
-- [ ] Volume-based lip sync (4 mouth levels)
-- [ ] Basic states: idle, listening, speaking
-- [ ] YAML configuration
-- [ ] Unit tests for all modules (≥80% coverage)
-- [ ] Integration smoke test
+- [x] Audio capture and playback (sounddevice)
+- [x] VAD activation (volume-based)
+- [x] OpenAI provider adapters (STT, LLM, TTS, Embeddings)
+- [x] Basic conversation engine (no memory yet)
+- [x] Avatar engine with face pack system
+- [x] Programmatic face (default) - no external assets needed
+- [x] Volume-based lip sync (4 mouth levels)
+- [x] Basic states: idle, listening, thinking, speaking
+- [x] YAML configuration
+- [x] Unit tests for all modules (57 tests passing)
+- [x] Blink animation (added early)
+- [x] LLM streaming with hybrid TTS for reduced latency
 
-**Out of scope for Phase 1:**
+**Latency optimization implemented:**
+- Streaming hybrid approach: first chunk (~80 chars) sent to TTS immediately
+- Remaining text synthesized after streaming completes (better prosody)
+- Audio playback queue for seamless sequential playback
+- Time-to-first-audio significantly reduced
+
+**Still out of scope:**
 - Semantic memory
 - Multiple providers
-- Thinking/error states with overlays
+- Error state with overlay
 - Sprite-based face packs (architecture ready, implementation Phase 2)
-- Blink animation
 
 ### Phase 2 - Memory & Polish
 

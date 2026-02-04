@@ -1,6 +1,8 @@
 """Runtime controller that orchestrates all components."""
 
 import queue
+import re
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -258,24 +260,184 @@ class RuntimeController:
             if self._conversation:
                 self._conversation.add_user_message(user_text)
 
-            # Generate response
-            response_text = self._complete_with_retry()
-            if not response_text:
-                self._handle_error()
-                return
-
-            print(f"Assistant: {response_text}")
-
-            # Add response to conversation
-            if self._conversation:
-                self._conversation.add_assistant_message(response_text)
-
-            # Synthesize and speak
-            self._speak_response(response_text)
+            # Generate response with streaming and speak as we go
+            self._stream_and_speak()
 
         except Exception as e:
             print(f"Error processing speech: {e}")
             self._handle_error()
+
+    # Minimum characters for first chunk (ensures enough audio to cover TTS latency)
+    MIN_FIRST_CHUNK_CHARS = 80
+
+    def _extract_first_chunk(self, text: str) -> tuple[str, str]:
+        """Extract first chunk of text suitable for TTS.
+
+        Extracts complete sentences until we have at least MIN_FIRST_CHUNK_CHARS,
+        or returns empty if we don't have enough text yet.
+
+        Args:
+            text: Text to extract from.
+
+        Returns:
+            Tuple of (first_chunk, remaining_text).
+        """
+        # Find all sentence boundaries
+        sentences: list[str] = []
+        remaining = text
+        total_len = 0
+
+        while remaining:
+            # Match sentence-ending punctuation followed by space or end
+            match = re.search(r"[.!?]\s+|[.!?]$|\n", remaining)
+            if match:
+                end_pos = match.end()
+                sentence = remaining[:end_pos].strip()
+                if sentence:
+                    sentences.append(sentence)
+                    total_len += len(sentence)
+                remaining = remaining[end_pos:].strip()
+
+                # Check if we have enough
+                if total_len >= self.MIN_FIRST_CHUNK_CHARS:
+                    return " ".join(sentences), remaining
+            else:
+                # No more complete sentences
+                break
+
+        # Not enough complete sentences yet
+        return "", text
+
+    def _stream_and_speak(self) -> None:
+        """Stream LLM response and speak with reduced latency.
+
+        Uses hybrid approach:
+        - First chunk (~80+ chars): TTS immediately, enqueue for playback
+        - Remaining text: TTS after streaming completes, enqueue
+        - Playback queue handles sequential playback autonomously
+        - Main thread keeps avatar responsive throughout
+        """
+        if (
+            self._llm is None
+            or self._conversation is None
+            or self._tts is None
+            or self._playback is None
+            or self._avatar is None
+        ):
+            return
+
+        # Pause VAD while speaking
+        if self._vad:
+            self._vad.pause()
+
+        # Set up playback callbacks
+        playback_done = threading.Event()
+
+        def on_queue_empty() -> None:
+            playback_done.set()
+
+        self._playback.set_volume_callback(self._on_playback_volume)
+        self._playback.set_on_queue_empty(on_queue_empty)
+
+        messages = self._conversation.build_messages()
+        base_messages = [Message(role=m.role, content=m.content) for m in messages]
+
+        # Shared state for streaming thread
+        full_response_holder: list[str] = [""]
+        stream_error: list[Exception | None] = [None]
+        streaming_done = threading.Event()
+
+        def stream_and_synthesize() -> None:
+            """Stream LLM and synthesize audio in background thread."""
+            accumulated_text = ""
+            first_chunk = ""
+            first_chunk_sent = False
+
+            try:
+                for chunk in self._llm.stream(base_messages):  # type: ignore
+                    accumulated_text += chunk
+
+                    # Check if we have enough for first chunk
+                    if not first_chunk_sent:
+                        first_chunk, remaining = self._extract_first_chunk(accumulated_text)
+                        if first_chunk:
+                            first_chunk_sent = True
+                            accumulated_text = remaining
+                            # Synthesize and enqueue first chunk immediately
+                            print(f"[Stream] Synthesizing ({len(first_chunk)} chars)...")
+                            audio = self._tts.synthesize(first_chunk)  # type: ignore
+                            print(f"[Stream] Enqueuing first chunk: {len(audio)} bytes")
+                            self._playback.play(audio, format="wav")  # type: ignore
+
+                # Synthesize remaining text
+                if accumulated_text.strip():
+                    print(f"[Stream] Synthesizing remaining ({len(accumulated_text)} chars)...")
+                    audio = self._tts.synthesize(accumulated_text)  # type: ignore
+                    print(f"[Stream] Enqueuing remaining: {len(audio)} bytes")
+                    self._playback.play(audio, format="wav")  # type: ignore
+
+                # Build full response
+                full_response_holder[0] = (
+                    first_chunk
+                    + (" " if first_chunk and accumulated_text else "")
+                    + accumulated_text
+                )
+
+            except Exception as e:
+                stream_error[0] = e
+                print(f"[Stream] Error in background: {e}")
+
+            finally:
+                streaming_done.set()
+
+        try:
+            print("[Stream] Starting LLM streaming...")
+            self._state = RuntimeState.SPEAKING
+            self._avatar.state = AvatarState.SPEAKING
+
+            # Start streaming in background thread
+            stream_thread = threading.Thread(target=stream_and_synthesize, daemon=True)
+            stream_thread.start()
+
+            # Phase 1: Keep avatar responsive while streaming (audio may start playing)
+            while not streaming_done.is_set():
+                if not self._avatar.run_frame():
+                    self._playback.stop()
+                    return
+                time.sleep(0.01)
+
+            # Check for errors from streaming
+            if stream_error[0] is not None:
+                raise stream_error[0]
+
+            # Add to conversation history now that we have the full response
+            full_response = full_response_holder[0]
+            print(f"Assistant: {full_response}")
+
+            if self._conversation and full_response:
+                self._conversation.add_assistant_message(full_response)
+
+            # Phase 2: Keep avatar responsive while remaining audio plays
+            # Now we can trust playback_done because no more audio will be enqueued
+            while not playback_done.is_set() and self._playback.is_playing:
+                if not self._avatar.run_frame():
+                    self._playback.stop()
+                    return
+                time.sleep(0.01)
+
+            print("[Stream] Playback complete")
+
+        except Exception as e:
+            print(f"[Stream] Error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            self._handle_error()
+            return
+
+        finally:
+            self._playback.set_on_queue_empty(None)
+            self._return_to_idle()
 
     def _transcribe_with_retry(self, audio_bytes: bytes) -> str:
         """Transcribe audio with retry logic.
@@ -368,6 +530,7 @@ class RuntimeController:
         except Exception as e:
             print(f"[Speak] Error: {e}")
             import traceback
+
             traceback.print_exc()
 
         finally:
