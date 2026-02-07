@@ -50,6 +50,9 @@ class VADConfig:
 class VADActivation:
     """Voice Activity Detection based activation system."""
 
+    # Seconds to ignore audio after resuming (echo suppression)
+    RESUME_COOLDOWN_S = 1.0
+
     def __init__(
         self,
         vad_config: VADConfig,
@@ -68,6 +71,7 @@ class VADActivation:
         self._recorded_audio: list[np.ndarray[Any, np.dtype[np.int16]]] = []
         self._speech_start_time: float = 0.0
         self._silence_start_time: float = 0.0
+        self._resume_time: float = 0.0
         self._on_speech_complete: Callable[[bytes], None] | None = None
         self._on_state_change: Callable[[VADState], None] | None = None
 
@@ -114,6 +118,7 @@ class VADActivation:
     def resume(self) -> None:
         """Resume VAD monitoring."""
         if self._audio_capture is not None and self._on_speech_complete is not None:
+            self._resume_time = time.time()
             self._audio_capture.start(self._process_audio)
             self._set_state(VADState.DORMANT)
 
@@ -134,8 +139,13 @@ class VADActivation:
         Args:
             audio_chunk: Audio samples.
         """
-        rms = AudioCapture.compute_rms(audio_chunk)
         current_time = time.time()
+
+        # Ignore audio during cooldown after resume (echo suppression)
+        if current_time - self._resume_time < self.RESUME_COOLDOWN_S:
+            return
+
+        rms = AudioCapture.compute_rms(audio_chunk)
         is_voice = rms > self.vad_config.volume_threshold
 
         if self._state == VADState.DORMANT:

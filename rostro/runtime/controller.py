@@ -235,6 +235,42 @@ class RuntimeController:
         # This avoids threading issues with Pygame
         self._speech_queue.put(audio_bytes)
 
+    # Minimum consecutive matching words to consider as echo
+    ECHO_MIN_CONSECUTIVE_WORDS = 4
+
+    def _is_echo(self, text: str) -> bool:
+        """Check if text is an echo of the last assistant response.
+
+        Uses n-gram matching: if any sequence of N+ consecutive words from the
+        transcription appears verbatim in the last response, it's likely the mic
+        picking up the speakers. Real user messages won't contain long verbatim
+        phrases from the response.
+
+        Args:
+            text: Transcribed user text.
+
+        Returns:
+            True if text appears to be an echo of the assistant's last response.
+        """
+        if self._conversation is None:
+            return False
+
+        last_assistant = self._conversation.get_last_assistant_message()
+        if not last_assistant:
+            return False
+
+        user_words = text.lower().split()
+        assistant_lower = last_assistant.lower()
+        n = self.ECHO_MIN_CONSECUTIVE_WORDS
+
+        for i in range(len(user_words) - n + 1):
+            phrase = " ".join(user_words[i : i + n])
+            if phrase in assistant_lower:
+                print(f"[Echo] Detected echo (matched: '{phrase}'), ignoring")
+                return True
+
+        return False
+
     def _process_speech(self, audio_bytes: bytes) -> None:
         """Process speech audio (called from main thread).
 
@@ -255,6 +291,11 @@ class RuntimeController:
                 return
 
             print(f"User: {user_text}")
+
+            # Check for echo (mic picking up speaker output)
+            if self._is_echo(user_text):
+                self._return_to_idle()
+                return
 
             # Add to conversation
             if self._conversation:

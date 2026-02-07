@@ -54,6 +54,17 @@ class ConversationEngine:
 
         return messages
 
+    def get_last_assistant_message(self) -> str | None:
+        """Get the last assistant message content.
+
+        Returns:
+            Last assistant message content, or None if no assistant messages.
+        """
+        for msg in reversed(self.history):
+            if msg.role == "assistant":
+                return msg.content
+        return None
+
     def clear_history(self) -> None:
         """Clear conversation history."""
         self.history.clear()
