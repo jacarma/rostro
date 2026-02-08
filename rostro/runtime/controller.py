@@ -90,7 +90,9 @@ class RuntimeController:
         self._speech_queue: queue.Queue[bytes] = queue.Queue()
 
         # Error handling config
-        self._error_config = ErrorConfig.from_dict(self.config.get("error_handling", {}))
+        self._error_config = ErrorConfig.from_dict(
+            self.config.get("error_handling", {})
+        )
 
     def _load_config(self, config_path: Path | None) -> dict[str, Any]:
         """Load configuration from YAML file.
@@ -141,7 +143,11 @@ class RuntimeController:
         self._stt = OpenAISTTProvider(model=stt_config.get("model", "whisper-1"))
 
         tts_config = providers_config.get("tts", {})
-        self._tts = OpenAITTSProvider(voice=tts_config.get("voice", "nova"))
+        self._tts = OpenAITTSProvider(
+            model=tts_config.get("model", "tts-1"),
+            voice=tts_config.get("voice", "nova"),
+            instructions=tts_config.get("instructions"),
+        )
 
         # Initialize conversation engine
         self._conversation = ConversationEngine.from_config(self.config)
@@ -158,7 +164,9 @@ class RuntimeController:
         self._avatar.initialize()
 
         # Initialize VAD
-        vad_config = VADConfig.from_dict(self.config.get("activation", {}).get("vad", {}))
+        vad_config = VADConfig.from_dict(
+            self.config.get("activation", {}).get("vad", {})
+        )
         self._vad = VADActivation(vad_config, audio_config)
         self._vad.start(
             on_speech_complete=self._on_speech_complete,
@@ -309,7 +317,7 @@ class RuntimeController:
             self._handle_error()
 
     # Minimum characters for first chunk (ensures enough audio to cover TTS latency)
-    MIN_FIRST_CHUNK_CHARS = 80
+    MIN_FIRST_CHUNK_CHARS = 200
 
     def _extract_first_chunk(self, text: str) -> tuple[str, str]:
         """Extract first chunk of text suitable for TTS.
@@ -400,19 +408,25 @@ class RuntimeController:
 
                     # Check if we have enough for first chunk
                     if not first_chunk_sent:
-                        first_chunk, remaining = self._extract_first_chunk(accumulated_text)
+                        first_chunk, remaining = self._extract_first_chunk(
+                            accumulated_text
+                        )
                         if first_chunk:
                             first_chunk_sent = True
                             accumulated_text = remaining
                             # Synthesize and enqueue first chunk immediately
-                            print(f"[Stream] Synthesizing ({len(first_chunk)} chars)...")
+                            print(
+                                f"[Stream] Synthesizing ({len(first_chunk)} chars)..."
+                            )
                             audio = self._tts.synthesize(first_chunk)  # type: ignore
                             print(f"[Stream] Enqueuing first chunk: {len(audio)} bytes")
                             self._playback.play(audio, format="wav")  # type: ignore
 
                 # Synthesize remaining text
                 if accumulated_text.strip():
-                    print(f"[Stream] Synthesizing remaining ({len(accumulated_text)} chars)...")
+                    print(
+                        f"[Stream] Synthesizing remaining ({len(accumulated_text)} chars)..."
+                    )
                     audio = self._tts.synthesize(accumulated_text)  # type: ignore
                     print(f"[Stream] Enqueuing remaining: {len(audio)} bytes")
                     self._playback.play(audio, format="wav")  # type: ignore
@@ -459,8 +473,11 @@ class RuntimeController:
                 self._conversation.add_assistant_message(full_response)
 
             # Phase 2: Keep avatar responsive while remaining audio plays
-            # Now we can trust playback_done because no more audio will be enqueued
-            while not playback_done.is_set() and self._playback.is_playing:
+            while not playback_done.is_set():
+                # Safety: if playback thread died without signaling, exit
+                if not self._playback.is_thread_alive and not self._playback.is_playing:
+                    print("[Stream] Playback thread ended, forcing exit")
+                    break
                 if not self._avatar.run_frame():
                     self._playback.stop()
                     return
@@ -517,7 +534,9 @@ class RuntimeController:
         for attempt in range(self._error_config.max_retries):
             try:
                 # Convert to base Message type for protocol
-                base_messages = [Message(role=m.role, content=m.content) for m in messages]
+                base_messages = [
+                    Message(role=m.role, content=m.content) for m in messages
+                ]
                 return self._llm.complete(base_messages)
             except Exception as e:
                 if attempt < self._error_config.max_retries - 1:

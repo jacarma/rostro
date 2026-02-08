@@ -226,6 +226,11 @@ class AudioPlayback:
         return self._is_playing or not self._queue.empty()
 
     @property
+    def is_thread_alive(self) -> bool:
+        """Check if the playback thread is still running."""
+        return self._playback_thread is not None and self._playback_thread.is_alive()
+
+    @property
     def queue_size(self) -> int:
         """Get the number of items in the queue."""
         return self._queue.qsize()

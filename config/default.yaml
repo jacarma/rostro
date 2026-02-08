@@ -7,7 +7,9 @@ providers:
     model: whisper-1
   tts:
     provider: openai
-    voice: nova
+    model: gpt-4o-mini-tts
+    voice: sage
+    instructions: "Habla en español de España con un tono amigable y natural."
   embeddings:
     provider: openai
     model: text-embedding-3-small
@@ -23,10 +25,11 @@ audio:
 activation:
   mode: vad
   vad:
-    volume_threshold: 0.02
+    confidence_threshold: 0.7
+    start_secs: 0.2
+    min_volume: 0.002
     silence_duration_ms: 1500
     min_speech_duration_ms: 300
-    sample_window_ms: 50
 
 avatar:
   face_pack: default
@@ -42,4 +45,4 @@ error_handling:
 persona:
   name: "Assistant"
   system_prompt: |
-    You are a friendly assistant. Keep responses concise and conversational.
+    Eres un asistente de voz amigable. Responde siempre en español.

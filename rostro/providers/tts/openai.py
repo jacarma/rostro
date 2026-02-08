@@ -4,29 +4,56 @@ from typing import Literal, cast
 
 from openai import OpenAI
 
-VoiceType = Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+VoiceType = Literal[
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "fable",
+    "onyx",
+    "nova",
+    "sage",
+    "shimmer",
+    "verse",
+]
 
 
 class OpenAITTSProvider:
     """OpenAI TTS API implementation for text-to-speech."""
 
-    AVAILABLE_VOICES: list[str] = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    AVAILABLE_VOICES: list[str] = [
+        "alloy",
+        "ash",
+        "ballad",
+        "coral",
+        "echo",
+        "fable",
+        "onyx",
+        "nova",
+        "sage",
+        "shimmer",
+        "verse",
+    ]
 
     def __init__(
         self,
         model: str = "tts-1",
         voice: str = "nova",
+        instructions: str | None = None,
         api_key: str | None = None,
     ) -> None:
         """Initialize the OpenAI TTS provider.
 
         Args:
-            model: TTS model to use (tts-1 or tts-1-hd).
+            model: TTS model to use (tts-1, tts-1-hd, or gpt-4o-mini-tts).
             voice: Default voice to use.
+            instructions: Voice style instructions (only for gpt-4o-mini-tts).
             api_key: OpenAI API key. If None, uses OPENAI_API_KEY env var.
         """
         self.model = model
         self.default_voice = voice
+        self.instructions = instructions
         self.client = OpenAI(api_key=api_key)
 
     def synthesize(self, text: str, voice: str | None = None) -> bytes:
@@ -41,12 +68,16 @@ class OpenAITTSProvider:
         """
         voice_to_use = cast(VoiceType, voice or self.default_voice)
 
-        response = self.client.audio.speech.create(
-            model=self.model,
-            voice=voice_to_use,
-            input=text,
-            response_format="wav",
-        )
+        kwargs: dict[str, object] = {
+            "model": self.model,
+            "voice": voice_to_use,
+            "input": text,
+            "response_format": "wav",
+        }
+        if self.instructions:
+            kwargs["instructions"] = self.instructions
+
+        response = self.client.audio.speech.create(**kwargs)  # type: ignore[arg-type]
 
         return response.content
 

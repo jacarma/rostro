@@ -24,10 +24,11 @@ def audio_config() -> AudioConfig:
 def vad_config() -> VADConfig:
     """Create a test VAD configuration."""
     return VADConfig(
-        volume_threshold=0.02,
+        confidence_threshold=0.7,
+        start_secs=0.2,
+        min_volume=0.002,
         silence_duration_ms=1500,
         min_speech_duration_ms=300,
-        sample_window_ms=50,
     )
 
 

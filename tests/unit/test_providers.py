@@ -80,7 +80,7 @@ class TestOpenAITTSProvider:
 
         assert "nova" in voices
         assert "alloy" in voices
-        assert len(voices) == 6
+        assert len(voices) == 11
 
 
 class TestOpenAILLMProvider:

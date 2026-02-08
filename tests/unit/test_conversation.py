@@ -1,6 +1,5 @@
 """Tests for conversation module."""
 
-
 from rostro.conversation.engine import ConversationEngine, Message
 
 

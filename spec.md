@@ -361,20 +361,25 @@ Determines when the user wants to interact using Voice Activity Detection (VAD).
 
 **VAD Implementation**
 
-- Simple volume-based detection (RMS threshold)
-- Optional: `webrtcvad` library for better accuracy (still CPU-light)
-- Configurable parameters for different environments
+- Neural voice detection using [Silero VAD](https://github.com/snakers4/silero-vad) ONNX model (~2.2MB)
+- Distinguishes real speech from noise, echo, and background sounds
+- RMS pre-filter skips inference on silence (saves CPU)
+- Speech confirmation: requires consecutive voice frames before starting recording
+- Pre-roll buffer (~800ms) captures speech onset during confirmation
+- Periodic model state reset during extended silence
+- ONNX model sourced from [Pipecat](https://github.com/pipecat-ai/pipecat)
 
 **Configuration**
 
 ```yaml
 activation:
-  mode: vad                      # Options: vad, push_to_talk, proximity (future)
+  mode: vad                          # Options: vad, push_to_talk, proximity (future)
   vad:
-    volume_threshold: 0.02       # RMS threshold (0.0-1.0)
-    silence_duration_ms: 1500    # Silence before end-of-speech
-    min_speech_duration_ms: 300  # Ignore very short sounds
-    sample_window_ms: 50         # Analysis window size
+    confidence_threshold: 0.7        # Silero confidence (0.0-1.0)
+    start_secs: 0.2                  # Consecutive voice seconds to confirm speech start
+    min_volume: 0.002                # RMS pre-filter (skip inference on silence)
+    silence_duration_ms: 1500        # Silence before end-of-speech
+    min_speech_duration_ms: 300      # Ignore very short sounds
 ```
 
 **States**
@@ -385,9 +390,10 @@ activation:
 
 **Tuning considerations**
 
-- `volume_threshold`: Lower = more sensitive, more false positives
+- `confidence_threshold`: Lower = more sensitive, more false positives (0.7 works well in most environments)
+- `start_secs`: Higher = fewer false triggers, but slightly slower response
 - `silence_duration_ms`: Lower = faster response, risk cutting off speech
-- Environment calibration may be needed (noisy vs quiet rooms)
+- `min_volume`: Pre-filter only; the neural model handles actual voice/noise discrimination
 
 **Future extensions**
 
@@ -701,7 +707,9 @@ audio:
 activation:
   mode: vad
   vad:
-    volume_threshold: 0.02
+    confidence_threshold: 0.7
+    start_secs: 0.2
+    min_volume: 0.002
     silence_duration_ms: 1500
     min_speech_duration_ms: 300
 
@@ -745,7 +753,7 @@ persona:
 **Goal:** End-to-end voice conversation with basic avatar
 
 - [x] Audio capture and playback (sounddevice)
-- [x] VAD activation (volume-based)
+- [x] VAD activation (Silero neural model)
 - [x] OpenAI provider adapters (STT, LLM, TTS, Embeddings)
 - [x] Basic conversation engine (no memory yet)
 - [x] Avatar engine with face pack system

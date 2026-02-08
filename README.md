@@ -5,6 +5,7 @@ A lightweight voice-driven 2D avatar assistant using external AI APIs.
 ## Features
 
 - **Voice-driven interaction** - Speak naturally, get spoken responses
+- **Neural voice detection** - [Silero VAD](https://github.com/snakers4/silero-vad) for accurate speech detection (ONNX model via [Pipecat](https://github.com/pipecat-ai/pipecat))
 - **2D avatar with lip-sync** - Animated face that moves with speech
 - **Multiple AI providers** - OpenAI for STT, LLM, TTS, and embeddings
 - **Low resource usage** - Designed for ARM devices and low-power systems
