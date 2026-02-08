@@ -32,7 +32,7 @@ activation:
     min_speech_duration_ms: 300
 
 avatar:
-  face_pack: default
+  face_pack: fatlady
   resolution: [800, 600]
   fps: 30
 
