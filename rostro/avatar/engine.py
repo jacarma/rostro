@@ -8,6 +8,7 @@ from typing import Any
 import pygame
 
 from rostro.avatar.face_pack import FacePack, FacePackType
+from rostro.avatar.photo import PhotoFace
 from rostro.avatar.programmatic import ProgrammaticFace
 
 
@@ -49,8 +50,9 @@ class AvatarEngine:
         self._clock: pygame.time.Clock | None = None
         self._running = False
 
-        # Programmatic face renderer
+        # Face renderers
         self._programmatic_face: ProgrammaticFace | None = None
+        self._photo_face: PhotoFace | None = None
 
         # Blink state
         self._last_blink_time = 0.0
@@ -67,7 +69,9 @@ class AvatarEngine:
         self._last_blink_time = time.time()
 
         # Initialize face renderer based on pack type
-        if self.face_pack.pack_type == FacePackType.PROGRAMMATIC:
+        if self.face_pack.pack_type == FacePackType.PHOTO:
+            self._photo_face = PhotoFace(self.face_pack.path, self.resolution)
+        elif self.face_pack.pack_type == FacePackType.PROGRAMMATIC:
             self._programmatic_face = ProgrammaticFace(self.face_pack.colors, self.resolution)
 
     def shutdown(self) -> None:
@@ -124,10 +128,11 @@ class AvatarEngine:
         """Update avatar state (blink timing, etc.)."""
         current_time = time.time()
 
-        # Handle blinking
+        # Handle blinking — only blink when mouth is closed
         if not self._is_blinking:
             if current_time - self._last_blink_time > 4.0:  # Blink every ~4 seconds
-                self._is_blinking = True
+                if self._mouth_level == 0:
+                    self._is_blinking = True
                 self._last_blink_time = current_time
         else:
             if current_time - self._last_blink_time > self._blink_duration:
@@ -138,8 +143,10 @@ class AvatarEngine:
         if self._screen is None:
             return
 
-        # Update programmatic face state
-        if self._programmatic_face is not None:
+        # Render face based on type
+        if self._photo_face is not None:
+            self._photo_face.render(self._screen, self._mouth_level, self._is_blinking)
+        elif self._programmatic_face is not None:
             self._programmatic_face.set_eyes_closed(self._is_blinking)
             self._programmatic_face.mouth_level = self._mouth_level
             self._programmatic_face.render(self._screen)

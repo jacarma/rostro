@@ -15,7 +15,8 @@
 - ✅ Lip-sync (boca se mueve con el audio)
 - ✅ Avatar Pygame con cara programática y parpadeo
 - ✅ Indicador de estado (verde=listening, amarillo=thinking, azul=speaking)
-- ✅ Tests unitarios pasando (57 tests)
+- ✅ Character packs (cara + voz + personalidad por avatar)
+- ✅ Tests unitarios pasando (81 tests)
 - ✅ mypy y ruff sin errores
 - ✅ Latencia reducida con streaming híbrido
 
@@ -85,6 +86,54 @@ Audio Input Thread (VAD)
   - Cola autónoma con `queue.Queue`
   - `play()` encola, thread reproduce secuencialmente
   - Callbacks: `volume_callback`, `on_queue_empty`
+
+## Character packs (faces)
+
+Cada avatar es un **character pack**: imágenes de cara + voz + personalidad. Se guardan en `assets/faces/<nombre>/`.
+
+### Estructura de un pack
+
+```
+assets/faces/mipersonaje/
+├── manifest.yaml
+├── m0.jpg          # boca cerrada
+├── m1.jpg          # boca ligeramente abierta
+├── m2.jpg          # boca media
+├── m3.jpg          # boca muy abierta
+└── blink.jpg       # ojos cerrados
+```
+
+Las imágenes pueden ser `.png`, `.jpg` o `.jpeg` (se buscan en ese orden). Se pueden mezclar extensiones.
+
+### manifest.yaml
+
+```yaml
+name: "Mi Personaje"
+version: "1.0"
+author: "Tu nombre"
+type: photo                # photo | programmatic
+voice: sage                # voz OpenAI TTS (opcional, override global)
+voice_instructions: "..."  # instrucciones de voz (opcional, override global)
+system_prompt: |           # personalidad (opcional, override global)
+  Eres un pirata gruñón.
+```
+
+Los campos `voice`, `voice_instructions` y `system_prompt` son opcionales. Si se incluyen, sobreescriben los valores de `config/default.yaml`.
+
+### Activar un pack
+
+En `config/default.yaml`:
+
+```yaml
+avatar:
+  face_pack: mipersonaje
+```
+
+### Código relevante
+
+- `rostro/avatar/face_pack.py` — `FacePack.load()` carga manifest + campos de persona
+- `rostro/avatar/photo.py` — `PhotoFace` renderiza imágenes (png/jpg/jpeg)
+- `rostro/runtime/controller.py` — `start()` aplica overrides del pack a TTS y ConversationEngine
 
 ## Configuración importante
 

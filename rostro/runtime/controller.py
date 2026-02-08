@@ -90,9 +90,7 @@ class RuntimeController:
         self._speech_queue: queue.Queue[bytes] = queue.Queue()
 
         # Error handling config
-        self._error_config = ErrorConfig.from_dict(
-            self.config.get("error_handling", {})
-        )
+        self._error_config = ErrorConfig.from_dict(self.config.get("error_handling", {}))
 
     def _load_config(self, config_path: Path | None) -> dict[str, Any]:
         """Load configuration from YAML file.
@@ -133,6 +131,17 @@ class RuntimeController:
         # Initialize audio config
         audio_config = AudioConfig.from_dict(self.config.get("audio", {}))
 
+        # Initialize avatar first (face pack may override voice/persona)
+        assets_path = Path("assets")
+        self._avatar = AvatarEngine.from_config(
+            self.config.get("avatar", {}),
+            assets_path if assets_path.exists() else None,
+        )
+        self._avatar.initialize()
+
+        # Apply character pack overrides
+        face_pack = self._avatar.face_pack
+
         # Initialize providers
         providers_config = self.config.get("providers", {})
 
@@ -143,30 +152,28 @@ class RuntimeController:
         self._stt = OpenAISTTProvider(model=stt_config.get("model", "whisper-1"))
 
         tts_config = providers_config.get("tts", {})
+        tts_voice = face_pack.voice or tts_config.get("voice", "nova")
+        tts_instructions = face_pack.voice_instructions or tts_config.get("instructions")
         self._tts = OpenAITTSProvider(
             model=tts_config.get("model", "tts-1"),
-            voice=tts_config.get("voice", "nova"),
-            instructions=tts_config.get("instructions"),
+            voice=tts_voice,
+            instructions=tts_instructions,
         )
 
-        # Initialize conversation engine
-        self._conversation = ConversationEngine.from_config(self.config)
+        # Initialize conversation engine (face pack may override system_prompt)
+        if face_pack.system_prompt:
+            persona_override = dict(self.config.get("persona", {}))
+            persona_override["system_prompt"] = face_pack.system_prompt
+            conv_config = {**self.config, "persona": persona_override}
+            self._conversation = ConversationEngine.from_config(conv_config)
+        else:
+            self._conversation = ConversationEngine.from_config(self.config)
 
         # Initialize audio playback
         self._playback = AudioPlayback(audio_config)
 
-        # Initialize avatar
-        assets_path = Path("assets")
-        self._avatar = AvatarEngine.from_config(
-            self.config.get("avatar", {}),
-            assets_path if assets_path.exists() else None,
-        )
-        self._avatar.initialize()
-
         # Initialize VAD
-        vad_config = VADConfig.from_dict(
-            self.config.get("activation", {}).get("vad", {})
-        )
+        vad_config = VADConfig.from_dict(self.config.get("activation", {}).get("vad", {}))
         self._vad = VADActivation(vad_config, audio_config)
         self._vad.start(
             on_speech_complete=self._on_speech_complete,
@@ -408,25 +415,19 @@ class RuntimeController:
 
                     # Check if we have enough for first chunk
                     if not first_chunk_sent:
-                        first_chunk, remaining = self._extract_first_chunk(
-                            accumulated_text
-                        )
+                        first_chunk, remaining = self._extract_first_chunk(accumulated_text)
                         if first_chunk:
                             first_chunk_sent = True
                             accumulated_text = remaining
                             # Synthesize and enqueue first chunk immediately
-                            print(
-                                f"[Stream] Synthesizing ({len(first_chunk)} chars)..."
-                            )
+                            print(f"[Stream] Synthesizing ({len(first_chunk)} chars)...")
                             audio = self._tts.synthesize(first_chunk)  # type: ignore
                             print(f"[Stream] Enqueuing first chunk: {len(audio)} bytes")
                             self._playback.play(audio, format="wav")  # type: ignore
 
                 # Synthesize remaining text
                 if accumulated_text.strip():
-                    print(
-                        f"[Stream] Synthesizing remaining ({len(accumulated_text)} chars)..."
-                    )
+                    print(f"[Stream] Synthesizing remaining ({len(accumulated_text)} chars)...")
                     audio = self._tts.synthesize(accumulated_text)  # type: ignore
                     print(f"[Stream] Enqueuing remaining: {len(audio)} bytes")
                     self._playback.play(audio, format="wav")  # type: ignore
@@ -534,9 +535,7 @@ class RuntimeController:
         for attempt in range(self._error_config.max_retries):
             try:
                 # Convert to base Message type for protocol
-                base_messages = [
-                    Message(role=m.role, content=m.content) for m in messages
-                ]
+                base_messages = [Message(role=m.role, content=m.content) for m in messages]
                 return self._llm.complete(base_messages)
             except Exception as e:
                 if attempt < self._error_config.max_retries - 1:

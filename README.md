@@ -55,6 +55,46 @@ Edit `config/default.yaml` to customize:
 - VAD sensitivity
 - Avatar appearance
 
+## Character Packs
+
+Each avatar is a **character pack** with its own face images, voice, and personality. Packs live in `assets/faces/<name>/`.
+
+### Creating a pack
+
+1. Create a directory under `assets/faces/` with 5 images (png, jpg, or jpeg):
+
+```
+assets/faces/mycharacter/
+├── manifest.yaml
+├── m0.jpg          # mouth closed
+├── m1.jpg          # mouth slightly open
+├── m2.jpg          # mouth medium
+├── m3.jpg          # mouth wide open
+└── blink.jpg       # eyes closed
+```
+
+2. Add a `manifest.yaml`:
+
+```yaml
+name: "My Character"
+version: "1.0"
+author: "Your Name"
+type: photo
+voice: sage                # OpenAI TTS voice (optional)
+voice_instructions: "..."  # voice style instructions (optional)
+system_prompt: |           # personality (optional)
+  You are a friendly assistant.
+```
+
+The `voice`, `voice_instructions`, and `system_prompt` fields are optional. When present, they override the global values from `config/default.yaml`.
+
+3. Activate it in `config/default.yaml`:
+
+```yaml
+avatar:
+  face_pack: mycharacter
+```
+
 ## Development
 
 ```bash

@@ -2,11 +2,14 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+import pygame
 import pytest
 
 from rostro.avatar.engine import AvatarEngine, AvatarState
 from rostro.avatar.face_pack import FaceColors, FacePack, FacePackType
+from rostro.avatar.photo import PhotoFace
 from rostro.avatar.programmatic import ProgrammaticFace, hex_to_rgb
 
 
@@ -70,6 +73,59 @@ colors:
         with TemporaryDirectory() as tmpdir:
             with pytest.raises(FileNotFoundError):
                 FacePack.load(Path(tmpdir))
+
+    def test_load_photo_manifest(self):
+        """Test loading a photo type manifest."""
+        with TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "manifest.yaml"
+            manifest.write_text(
+                """
+name: "Test Photo"
+version: "1.0"
+author: "Test"
+type: photo
+"""
+            )
+            pack = FacePack.load(Path(tmpdir))
+            assert pack.name == "Test Photo"
+            assert pack.pack_type == FacePackType.PHOTO
+
+    def test_load_photo_manifest_with_persona(self):
+        """Test that voice, voice_instructions, system_prompt load from manifest."""
+        with TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "manifest.yaml"
+            manifest.write_text(
+                """
+name: "Persona Pack"
+version: "1.0"
+author: "Test"
+type: photo
+voice: sage
+voice_instructions: "Speak slowly."
+system_prompt: "You are a pirate."
+"""
+            )
+            pack = FacePack.load(Path(tmpdir))
+            assert pack.voice == "sage"
+            assert pack.voice_instructions == "Speak slowly."
+            assert pack.system_prompt == "You are a pirate."
+
+    def test_persona_fields_default_to_none(self):
+        """Test that packs without persona fields have None values."""
+        with TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "manifest.yaml"
+            manifest.write_text(
+                """
+name: "Basic Pack"
+version: "1.0"
+author: "Test"
+type: programmatic
+"""
+            )
+            pack = FacePack.load(Path(tmpdir))
+            assert pack.voice is None
+            assert pack.voice_instructions is None
+            assert pack.system_prompt is None
 
 
 class TestHexToRgb:
@@ -193,3 +249,151 @@ class TestAvatarEngine:
         engine = AvatarEngine.from_config(config)
         assert engine.resolution == (1280, 720)
         assert engine.fps == 24
+
+    def test_blink_skipped_when_mouth_open(self):
+        """Test that blink is skipped when mouth_level > 0."""
+        engine = AvatarEngine()
+        engine._mouth_level = 2
+        engine._last_blink_time = 0.0  # long ago
+        engine._is_blinking = False
+
+        with patch("rostro.avatar.engine.time") as mock_time:
+            mock_time.time.return_value = 100.0  # well past 4s
+            engine.update()
+
+        # Should NOT blink because mouth is open
+        assert engine._is_blinking is False
+        # But timer should still reset
+        assert engine._last_blink_time == 100.0
+
+    def test_blink_allowed_when_mouth_closed(self):
+        """Test that blink occurs when mouth_level == 0."""
+        engine = AvatarEngine()
+        engine._mouth_level = 0
+        engine._last_blink_time = 0.0
+        engine._is_blinking = False
+
+        with patch("rostro.avatar.engine.time") as mock_time:
+            mock_time.time.return_value = 100.0
+            engine.update()
+
+        assert engine._is_blinking is True
+
+
+def _create_dummy_png(
+    path: Path, width: int, height: int, color: tuple[int, int, int] = (128, 128, 128)
+) -> None:
+    """Create a dummy PNG file for testing."""
+    surface = pygame.Surface((width, height))
+    surface.fill(color)
+    pygame.image.save(surface, str(path))
+
+
+class TestPhotoFace:
+    """Tests for PhotoFace."""
+
+    @pytest.fixture(autouse=True)
+    def _init_pygame(self):
+        """Initialize pygame for tests."""
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        yield
+        pygame.quit()
+
+    def _create_pack_dir(
+        self, tmpdir: str, img_w: int = 1024, img_h: int = 1024, ext: str = ".png"
+    ) -> Path:
+        """Create a face pack directory with dummy images."""
+        pack_path = Path(tmpdir)
+        for stem in PhotoFace.MOUTH_STEMS:
+            _create_dummy_png(pack_path / f"{stem}{ext}", img_w, img_h, (100, 100, 100))
+        _create_dummy_png(pack_path / f"{PhotoFace.BLINK_STEM}{ext}", img_w, img_h, (50, 50, 50))
+        return pack_path
+
+    def test_load_all_images(self):
+        """Test that all 5 images are loaded successfully."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir)
+            face = PhotoFace(pack_path, (800, 600))
+            assert len(face._mouth_surfaces) == 4
+            assert face._blink_surface is not None
+
+    def test_missing_image_raises_error(self):
+        """Test that missing image raises FileNotFoundError."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = Path(tmpdir)
+            # Only create some images, not all
+            _create_dummy_png(pack_path / "m0.png", 100, 100)
+            with pytest.raises(FileNotFoundError):
+                PhotoFace(pack_path, (800, 600))
+
+    def test_cover_crop_square_to_landscape(self):
+        """Test cover crop: 1024x1024 image to 800x600 window."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir, 1024, 1024)
+            face = PhotoFace(pack_path, (800, 600))
+            # All surfaces should match window size
+            for s in face._mouth_surfaces:
+                assert s.get_size() == (800, 600)
+            assert face._blink_surface.get_size() == (800, 600)
+
+    def test_cover_crop_landscape_to_portrait(self):
+        """Test cover crop: wide image to tall window."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir, 1920, 1080)
+            face = PhotoFace(pack_path, (600, 800))
+            for s in face._mouth_surfaces:
+                assert s.get_size() == (600, 800)
+
+    def test_render_selects_mouth_surface(self):
+        """Test that render uses the correct mouth surface."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir)
+            face = PhotoFace(pack_path, (800, 600))
+            target = pygame.Surface((800, 600))
+
+            # Should not raise for any valid mouth level
+            for level in range(4):
+                face.render(target, level, False)
+
+    def test_render_blink(self):
+        """Test that render uses blink surface when blinking."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir)
+            face = PhotoFace(pack_path, (800, 600))
+            target = pygame.Surface((800, 600))
+
+            # Should use blink surface
+            face.render(target, 0, True)
+
+    def test_render_clamps_mouth_level(self):
+        """Test that out-of-range mouth levels are clamped."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir)
+            face = PhotoFace(pack_path, (800, 600))
+            target = pygame.Surface((800, 600))
+
+            # Should not raise even with out-of-range values
+            face.render(target, -1, False)
+            face.render(target, 5, False)
+
+    def test_finds_jpeg_images(self):
+        """Test that PhotoFace finds .jpg and .jpeg images."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = self._create_pack_dir(tmpdir, ext=".jpg")
+            face = PhotoFace(pack_path, (800, 600))
+            assert len(face._mouth_surfaces) == 4
+            assert face._blink_surface is not None
+
+    def test_finds_mixed_extensions(self):
+        """Test that PhotoFace handles mixed png/jpg/jpeg extensions."""
+        with TemporaryDirectory() as tmpdir:
+            pack_path = Path(tmpdir)
+            # Mix of extensions like the real fatlady pack
+            _create_dummy_png(pack_path / "m0.jpg", 100, 100)
+            _create_dummy_png(pack_path / "m1.jpeg", 100, 100)
+            _create_dummy_png(pack_path / "m2.png", 100, 100)
+            _create_dummy_png(pack_path / "m3.jpeg", 100, 100)
+            _create_dummy_png(pack_path / "blink.jpeg", 100, 100)
+            face = PhotoFace(pack_path, (800, 600))
+            assert len(face._mouth_surfaces) == 4

@@ -13,6 +13,7 @@ class FacePackType(Enum):
 
     PROGRAMMATIC = auto()  # Built-in procedural rendering
     SPRITES = auto()  # PNG sprite-based rendering
+    PHOTO = auto()  # Full-frame photographic images
 
 
 @dataclass
@@ -48,6 +49,11 @@ class FacePack:
     # For programmatic type
     colors: FaceColors = field(default_factory=FaceColors)
 
+    # Character configuration (optional, overrides global config)
+    voice: str | None = None
+    voice_instructions: str | None = None
+    system_prompt: str | None = None
+
     # For sprites type (Phase 2)
     resolution: tuple[int, int] = (512, 512)
     base_image: str | None = None
@@ -75,9 +81,12 @@ class FacePack:
             data: dict[str, Any] = yaml.safe_load(f)
 
         pack_type_str = data.get("type", "programmatic")
-        pack_type = (
-            FacePackType.SPRITES if pack_type_str == "sprites" else FacePackType.PROGRAMMATIC
-        )
+        type_map = {
+            "programmatic": FacePackType.PROGRAMMATIC,
+            "sprites": FacePackType.SPRITES,
+            "photo": FacePackType.PHOTO,
+        }
+        pack_type = type_map.get(pack_type_str, FacePackType.PROGRAMMATIC)
 
         pack = cls(
             name=data.get("name", "Unknown"),
@@ -85,6 +94,9 @@ class FacePack:
             author=data.get("author", "Unknown"),
             pack_type=pack_type,
             path=path,
+            voice=data.get("voice"),
+            voice_instructions=data.get("voice_instructions"),
+            system_prompt=data.get("system_prompt"),
         )
 
         if pack_type == FacePackType.PROGRAMMATIC:
