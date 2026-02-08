@@ -63,7 +63,8 @@ class AvatarEngine:
         """Initialize Pygame and create window."""
         pygame.init()
         pygame.display.set_caption("Rostro")
-        self._screen = pygame.display.set_mode(self.resolution)
+        self._screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        self.resolution = self._screen.get_size()
         self._clock = pygame.time.Clock()
         self._running = True
         self._last_blink_time = time.time()
