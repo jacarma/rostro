@@ -230,10 +230,10 @@ class TestAvatarEngine:
         engine.set_volume(0.0)
         assert engine._mouth_level == 0
 
-        engine.set_volume(0.03)
+        engine.set_volume(0.015)
         assert engine._mouth_level == 1
 
-        engine.set_volume(0.10)
+        engine.set_volume(0.03)
         assert engine._mouth_level == 2
 
         engine.set_volume(0.5)

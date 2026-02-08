@@ -3,6 +3,7 @@
 import io
 import queue
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
@@ -156,29 +157,29 @@ class AudioPlayback:
         audio = item.audio
         sample_rate = item.sample_rate
         chunk_size = self.config.chunk_size
+        total_samples = len(audio)
 
-        print(f"[Playback] Playing: {len(audio)} samples, {len(audio) / sample_rate:.2f}s")
+        print(f"[Playback] Playing: {total_samples} samples, {total_samples / sample_rate:.2f}s")
 
         try:
             # Start playback
             sd.play(audio, sample_rate, device=self.config.output_device)
-
-            # Track volume while playing
-            total_samples = len(audio)
-            position = 0
+            start_time = time.monotonic()
 
             while not self._stop_event.is_set():
                 stream = sd.get_stream()
                 if stream is None or not stream.active:
                     break
 
-                # Calculate and report volume for lip-sync
+                # Calculate position from elapsed time (avoids drift)
+                elapsed = time.monotonic() - start_time
+                position = int(elapsed * sample_rate)
+
                 if self._volume_callback is not None and position < total_samples:
                     end = min(position + chunk_size, total_samples)
                     chunk = audio[position:end]
                     rms = float(np.sqrt(np.mean(chunk**2)))
                     self._volume_callback(rms)
-                    position = end
 
                 sd.sleep(int(self.config.chunk_duration_ms))
 

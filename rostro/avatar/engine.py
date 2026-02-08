@@ -103,9 +103,9 @@ class AvatarEngine:
         # Convert volume to mouth level (0-3)
         if volume < 0.01:
             self._mouth_level = 0
-        elif volume < 0.05:
+        elif volume < 0.02:
             self._mouth_level = 1
-        elif volume < 0.15:
+        elif volume < 0.05:
             self._mouth_level = 2
         else:
             self._mouth_level = 3
