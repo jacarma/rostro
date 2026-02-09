@@ -22,6 +22,11 @@ class AudioItem:
     sample_rate: int
 
 
+PLAYBACK_SAMPLE_RATE = 48000
+"""Standard playback rate (Hz). 24kHz from TTS is not natively supported
+by most audio hardware, causing noisy resampling in ALSA/PulseAudio."""
+
+
 class AudioPlayback:
     """Handles audio playback with a queue for sequential playback.
 
@@ -156,7 +161,17 @@ class AudioPlayback:
         """
         audio = item.audio
         sample_rate = item.sample_rate
-        chunk_size = self.config.chunk_size
+
+        # Upsample to standard rate for hardware compatibility
+        if sample_rate != PLAYBACK_SAMPLE_RATE:
+            ratio = PLAYBACK_SAMPLE_RATE / sample_rate
+            new_length = int(len(audio) * ratio)
+            old_indices = np.arange(len(audio))
+            new_indices = np.linspace(0, len(audio) - 1, new_length)
+            audio = np.interp(new_indices, old_indices, audio).astype(np.float32)
+            sample_rate = PLAYBACK_SAMPLE_RATE
+
+        chunk_size = int(sample_rate * self.config.chunk_duration_ms / 1000)
         total_samples = len(audio)
 
         print(f"[Playback] Playing: {total_samples} samples, {total_samples / sample_rate:.2f}s")
