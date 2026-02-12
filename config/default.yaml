@@ -7,7 +7,7 @@ providers:
     model: whisper-1
   tts:
     provider: google
-    voice: es-ES-Wavenet-F  # Female WaveNet voice
+    voice: es-ES-Chirp-HD-F  # Female Chirp HD (muy natural)
     language_code: es-ES
     speaking_rate: 1.0
     pitch: 0.0
