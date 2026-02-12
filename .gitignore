@@ -84,3 +84,4 @@ Thumbs.db
 *.ogg
 recordings/
 CLAUDE.local.md
+config/credentials/

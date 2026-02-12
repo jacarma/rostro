@@ -45,6 +45,11 @@ class AvatarEngine:
         self._mouth_level = 0
         self._current_volume = 0.0
 
+        # Adaptive lip-sync: track volume history for dynamic thresholds
+        self._volume_peak = 0.05  # Initial peak estimate
+        self._volume_decay = 0.995  # How fast peak decays (closer to 1 = slower)
+        self._volume_attack = 0.3  # How fast peak rises (closer to 1 = faster)
+
         # Pygame state
         self._screen: pygame.Surface | None = None
         self._clock: pygame.time.Clock | None = None
@@ -97,19 +102,37 @@ class AvatarEngine:
     def set_volume(self, volume: float) -> None:
         """Set current audio volume for lip sync.
 
+        Uses adaptive thresholds based on recent volume peak.
+
         Args:
             volume: Volume level 0.0-1.0.
         """
         self._current_volume = max(0.0, min(1.0, volume))
-        # Convert volume to mouth level (0-3)
-        if volume < 0.01:
-            self._mouth_level = 0
-        elif volume < 0.02:
-            self._mouth_level = 1
-        elif volume < 0.05:
-            self._mouth_level = 2
+
+        # Update adaptive peak tracking
+        if volume > self._volume_peak:
+            # Fast attack: quickly rise to new peaks
+            self._volume_peak = (
+                self._volume_attack * volume
+                + (1 - self._volume_attack) * self._volume_peak
+            )
         else:
-            self._mouth_level = 3
+            # Slow decay: gradually decrease peak over time
+            self._volume_peak *= self._volume_decay
+
+        # Ensure minimum peak to avoid division issues
+        peak = max(self._volume_peak, 0.01)
+
+        # Normalize volume relative to peak and convert to mouth level
+        # Thresholds at ~15%, ~35%, ~60% of peak
+        if volume < peak * 0.15:
+            self._mouth_level = 0  # Closed
+        elif volume < peak * 0.35:
+            self._mouth_level = 1  # Slightly open
+        elif volume < peak * 0.60:
+            self._mouth_level = 2  # Medium open
+        else:
+            self._mouth_level = 3  # Wide open
 
     def process_events(self) -> bool:
         """Process Pygame events.

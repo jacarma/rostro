@@ -20,6 +20,7 @@ from rostro.conversation.engine import ConversationEngine
 from rostro.providers.base import Message
 from rostro.providers.llm.openai import OpenAILLMProvider
 from rostro.providers.stt.openai import OpenAISTTProvider
+from rostro.providers.tts.google import GoogleTTSProvider
 from rostro.providers.tts.openai import OpenAITTSProvider
 
 
@@ -83,7 +84,7 @@ class RuntimeController:
         self._playback: AudioPlayback | None = None
         self._conversation: ConversationEngine | None = None
         self._stt: OpenAISTTProvider | None = None
-        self._tts: OpenAITTSProvider | None = None
+        self._tts: OpenAITTSProvider | GoogleTTSProvider | None = None
         self._llm: OpenAILLMProvider | None = None
 
         # Queue for audio from VAD (to avoid threading issues with Pygame)
@@ -152,13 +153,24 @@ class RuntimeController:
         self._stt = OpenAISTTProvider(model=stt_config.get("model", "whisper-1"))
 
         tts_config = providers_config.get("tts", {})
+        tts_provider = tts_config.get("provider", "openai")
         tts_voice = face_pack.voice or tts_config.get("voice", "nova")
-        tts_instructions = face_pack.voice_instructions or tts_config.get("instructions")
-        self._tts = OpenAITTSProvider(
-            model=tts_config.get("model", "tts-1"),
-            voice=tts_voice,
-            instructions=tts_instructions,
-        )
+
+        if tts_provider == "google":
+            self._tts = GoogleTTSProvider(
+                voice=tts_voice,
+                language_code=tts_config.get("language_code", "es-ES"),
+                speaking_rate=tts_config.get("speaking_rate", 1.0),
+                pitch=tts_config.get("pitch", 0.0),
+                credentials_path=tts_config.get("credentials_path"),
+            )
+        else:
+            tts_instructions = face_pack.voice_instructions or tts_config.get("instructions")
+            self._tts = OpenAITTSProvider(
+                model=tts_config.get("model", "tts-1"),
+                voice=tts_voice,
+                instructions=tts_instructions,
+            )
 
         # Initialize conversation engine (face pack may override system_prompt)
         if face_pack.system_prompt:

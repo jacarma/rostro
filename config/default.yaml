@@ -6,10 +6,11 @@ providers:
     provider: openai
     model: whisper-1
   tts:
-    provider: openai
-    model: gpt-4o-mini-tts
-    voice: sage
-    instructions: "Habla en español de España con un tono amigable y natural."
+    provider: google
+    voice: es-ES-Wavenet-F  # Female WaveNet voice
+    language_code: es-ES
+    speaking_rate: 1.0
+    pitch: 0.0
   embeddings:
     provider: openai
     model: text-embedding-3-small
