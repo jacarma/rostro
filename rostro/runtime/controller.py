@@ -17,7 +17,9 @@ from rostro.audio.config import AudioConfig
 from rostro.audio.playback import AudioPlayback
 from rostro.avatar.engine import AvatarEngine, AvatarState
 from rostro.conversation.engine import ConversationEngine
+from rostro.memory import MemoryConfig, MemoryManager
 from rostro.providers.base import Message
+from rostro.providers.embeddings.openai import OpenAIEmbeddingProvider
 from rostro.providers.llm.openai import OpenAILLMProvider
 from rostro.providers.stt.openai import OpenAISTTProvider
 from rostro.providers.tts.google import GoogleTTSProvider
@@ -86,6 +88,8 @@ class RuntimeController:
         self._stt: OpenAISTTProvider | None = None
         self._tts: OpenAITTSProvider | GoogleTTSProvider | None = None
         self._llm: OpenAILLMProvider | None = None
+        self._embedder: OpenAIEmbeddingProvider | None = None
+        self._memory: MemoryManager | None = None
 
         # Queue for audio from VAD (to avoid threading issues with Pygame)
         self._speech_queue: queue.Queue[bytes] = queue.Queue()
@@ -149,6 +153,18 @@ class RuntimeController:
         llm_config = providers_config.get("llm", {})
         self._llm = OpenAILLMProvider(model=llm_config.get("model", "gpt-4o-mini"))
 
+        # Initialize memory system
+        embeddings_config = providers_config.get("embeddings", {})
+        self._embedder = OpenAIEmbeddingProvider(
+            model=embeddings_config.get("model", "text-embedding-3-small"),
+        )
+        memory_config = MemoryConfig.from_dict(self.config.get("memory", {}))
+        self._memory = MemoryManager(
+            config=memory_config,
+            llm=self._llm,
+            embedder=self._embedder,
+        )
+
         stt_config = providers_config.get("stt", {})
         self._stt = OpenAISTTProvider(model=stt_config.get("model", "whisper-1"))
 
@@ -205,6 +221,9 @@ class RuntimeController:
         """Stop all components and shutdown."""
         self._state = RuntimeState.STOPPING
         self._running = False
+
+        if self._memory:
+            self._memory.stop()
 
         if self._vad:
             self._vad.stop()
@@ -327,6 +346,15 @@ class RuntimeController:
             # Add to conversation
             if self._conversation:
                 self._conversation.add_user_message(user_text)
+
+            # Update memory system
+            if self._memory and self._conversation:
+                self._memory.on_user_message(user_text)
+                context = self._memory.get_context()
+                self._conversation.set_memory_context(context)
+                self._memory.set_history(
+                    [{"role": m.role, "content": m.content} for m in self._conversation.history]
+                )
 
             # Generate response with streaming and speak as we go
             self._stream_and_speak()
@@ -484,6 +512,12 @@ class RuntimeController:
 
             if self._conversation and full_response:
                 self._conversation.add_assistant_message(full_response)
+
+                # Update memory history with assistant response
+                if self._memory:
+                    self._memory.set_history(
+                        [{"role": m.role, "content": m.content} for m in self._conversation.history]
+                    )
 
             # Phase 2: Keep avatar responsive while remaining audio plays
             while not playback_done.is_set():

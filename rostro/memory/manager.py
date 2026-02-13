@@ -3,7 +3,7 @@
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,9 +37,7 @@ class MemoryConfig:
             db_path=Path(data.get("db_path", "data/memory.db")),
             topic_split_threshold_lines=data.get("topic_split_threshold_lines", 50),
             min_conclusions_for_new_topic=data.get("min_conclusions_for_new_topic", 3),
-            embedding_similarity_threshold=data.get(
-                "embedding_similarity_threshold", 0.7
-            ),
+            embedding_similarity_threshold=data.get("embedding_similarity_threshold", 0.7),
             max_memories_per_search=data.get("max_memories_per_search", 5),
             index_max_entries=data.get("index_max_entries", 20),
         )
@@ -130,13 +128,9 @@ class MemoryManager:
                         self._trigger_split(self._active_topic)
                 elif len(conclusions) >= self._config.min_conclusions_for_new_topic:
                     conversation_text = " ".join(
-                        msg["content"]
-                        for msg in self._history
-                        if msg["role"] == "user"
+                        msg["content"] for msg in self._history if msg["role"] == "user"
                     )
-                    topic = self._detector.detect(
-                        conversation_text, self._topics.list_topics()
-                    )
+                    topic = self._detector.detect(conversation_text, self._topics.list_topics())
                     if topic:
                         for conclusion in conclusions:
                             self._topics.append(topic, conclusion)
@@ -178,7 +172,7 @@ class MemoryManager:
         if index_path.exists():
             lines = index_path.read_text().strip().splitlines()
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         new_line = f"{now}|{topic}|{summary}"
         lines.insert(0, new_line)
         lines = lines[: self._config.index_max_entries]

@@ -1,6 +1,6 @@
 """Context builder — assembles dynamic system prompt layers."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from rostro.memory.general_store import MemoryResult
 
@@ -69,8 +69,8 @@ class ContextBuilder:
         try:
             ts = datetime.fromisoformat(iso_timestamp)
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
+                ts = ts.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
             delta = now - ts
             seconds = int(delta.total_seconds())
             if seconds < 60:

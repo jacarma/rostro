@@ -18,6 +18,15 @@ class ConversationEngine:
     system_prompt: str = ""
     max_history: int = 10
     history: list[Message] = field(default_factory=list)
+    _memory_context: str = field(default="", repr=False)
+
+    def set_memory_context(self, context: str) -> None:
+        """Set the memory context to inject into the system prompt.
+
+        Args:
+            context: Memory context string (topic index, memories, etc.).
+        """
+        self._memory_context = context
 
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation.
@@ -45,9 +54,13 @@ class ConversationEngine:
         """
         messages: list[Message] = []
 
-        # Add system prompt if present
-        if self.system_prompt:
-            messages.append(Message(role="system", content=self.system_prompt))
+        # Build system prompt with optional memory context
+        system = self.system_prompt
+        if self._memory_context:
+            system = system + "\n\n" + self._memory_context if system else self._memory_context
+
+        if system:
+            messages.append(Message(role="system", content=system))
 
         # Add conversation history
         messages.extend(self.history)

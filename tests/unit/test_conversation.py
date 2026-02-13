@@ -101,3 +101,28 @@ class TestConversationEngine:
         """Test creating from empty config."""
         engine = ConversationEngine.from_config({})
         assert engine.system_prompt == ""
+
+    def test_set_memory_context(self):
+        """Test injecting memory context into system prompt."""
+        engine = ConversationEngine(system_prompt="You are helpful.")
+        engine.set_memory_context("Things you know:\n- Likes rice")
+        messages = engine.build_messages()
+        assert len(messages) == 1
+        assert "You are helpful." in messages[0].content
+        assert "Likes rice" in messages[0].content
+
+    def test_set_memory_context_empty(self):
+        """Test that empty memory context doesn't break things."""
+        engine = ConversationEngine(system_prompt="You are helpful.")
+        engine.set_memory_context("")
+        messages = engine.build_messages()
+        assert messages[0].content == "You are helpful."
+
+    def test_memory_context_updates(self):
+        """Test that memory context can be updated."""
+        engine = ConversationEngine(system_prompt="Base prompt.")
+        engine.set_memory_context("Context v1")
+        engine.set_memory_context("Context v2")
+        messages = engine.build_messages()
+        assert "Context v2" in messages[0].content
+        assert "Context v1" not in messages[0].content

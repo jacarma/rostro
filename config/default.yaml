@@ -47,3 +47,13 @@ persona:
   name: "Assistant"
   system_prompt: |
     Eres un asistente de voz amigable. Responde siempre en español.
+
+memory:
+  session_timeout_minutes: 7
+  topics_dir: data/topics
+  topic_split_threshold_lines: 50
+  min_conclusions_for_new_topic: 3
+  db_path: data/memory.db
+  embedding_similarity_threshold: 0.7
+  max_memories_per_search: 5
+  index_max_entries: 20

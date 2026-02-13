@@ -2,7 +2,7 @@
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -60,7 +60,7 @@ class GeneralStore:
         """
         embedding = self._embedder.embed(text)
         blob = np.array(embedding, dtype=np.float32).tobytes()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = sqlite3.connect(self._db_path)
         conn.execute(
             "INSERT INTO memories (text, embedding, topic, created_at) VALUES (?, ?, ?, ?)",
@@ -79,9 +79,7 @@ class GeneralStore:
             List of matching memories sorted by similarity score.
         """
         conn = sqlite3.connect(self._db_path)
-        rows = conn.execute(
-            "SELECT text, embedding, topic, created_at FROM memories"
-        ).fetchall()
+        rows = conn.execute("SELECT text, embedding, topic, created_at FROM memories").fetchall()
         conn.close()
 
         if not rows:
@@ -101,9 +99,7 @@ class GeneralStore:
             score = float(np.dot(query_vec, mem_vec) / (query_norm * mem_norm))
             if score >= self._threshold:
                 results.append(
-                    MemoryResult(
-                        text=text, topic=topic, score=score, created_at=created_at
-                    )
+                    MemoryResult(text=text, topic=topic, score=score, created_at=created_at)
                 )
 
         results.sort(key=lambda r: r.score, reverse=True)
