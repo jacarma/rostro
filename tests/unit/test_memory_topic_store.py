@@ -61,9 +61,7 @@ class TestTopicStore:
         # header + blank line + 2 entries = 4 lines
         assert store.line_count("cooking") == 4
 
-    def test_replace_topic_with_subtopics(
-        self, store: TopicStore, tmp_path: Path
-    ) -> None:
+    def test_replace_topic_with_subtopics(self, store: TopicStore, tmp_path: Path) -> None:
         store.append("cooking", "Original entry")
         subtopics = {
             "cooking-baking": "# Cooking Baking\n\n- Baking entry",

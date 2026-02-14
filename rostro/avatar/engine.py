@@ -113,8 +113,7 @@ class AvatarEngine:
         if volume > self._volume_peak:
             # Fast attack: quickly rise to new peaks
             self._volume_peak = (
-                self._volume_attack * volume
-                + (1 - self._volume_attack) * self._volume_peak
+                self._volume_attack * volume + (1 - self._volume_attack) * self._volume_peak
             )
         else:
             # Slow decay: gradually decrease peak over time

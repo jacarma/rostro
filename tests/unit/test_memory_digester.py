@@ -12,9 +12,7 @@ def _make_digester(llm: MagicMock) -> Digester:
 class TestDigester:
     def test_extract_conclusions(self) -> None:
         llm = MagicMock()
-        llm.complete.return_value = (
-            '["Prefers bomba rice for paella", "Allergic to tree nuts"]'
-        )
+        llm.complete.return_value = '["Prefers bomba rice for paella", "Allergic to tree nuts"]'
         digester = _make_digester(llm)
         history = [
             {"role": "user", "content": "I always use bomba rice"},

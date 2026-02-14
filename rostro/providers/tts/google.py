@@ -65,9 +65,7 @@ class GoogleTTSProvider:
             creds_path = project_root / "config" / "credentials" / "google-tts.json"
 
         if creds_path.exists():
-            credentials = service_account.Credentials.from_service_account_file(
-                str(creds_path)
-            )  # type: ignore[no-untyped-call]
+            credentials = service_account.Credentials.from_service_account_file(str(creds_path))  # type: ignore[no-untyped-call]
             self.client = texttospeech.TextToSpeechClient(credentials=credentials)
         else:
             # Try default credentials (e.g., from gcloud auth)
@@ -142,7 +140,7 @@ class GoogleTTSProvider:
             b"WAVE",
             b"fmt ",
             16,  # Subchunk1Size for PCM
-            1,   # AudioFormat (1 = PCM)
+            1,  # AudioFormat (1 = PCM)
             num_channels,
             sample_rate,
             byte_rate,

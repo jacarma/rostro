@@ -15,9 +15,7 @@ class Digester:
         if not history:
             return []
 
-        conversation = "\n".join(
-            f"{msg['role'].upper()}: {msg['content']}" for msg in history
-        )
+        conversation = "\n".join(f"{msg['role'].upper()}: {msg['content']}" for msg in history)
         prompt = (
             "Analyze this conversation and extract conclusions, decisions, "
             "or discoveries. Include observations made by the assistant that "

@@ -42,9 +42,7 @@ class TestTopicSplit:
         mock_llm: MagicMock,
         mock_embedder: MagicMock,
     ) -> None:
-        manager = MemoryManager(
-            config=memory_config, llm=mock_llm, embedder=mock_embedder
-        )
+        manager = MemoryManager(config=memory_config, llm=mock_llm, embedder=mock_embedder)
         topics_dir = memory_config.topics_dir
 
         for i in range(8):
@@ -77,9 +75,7 @@ class TestTopicSplit:
         mock_llm: MagicMock,
         mock_embedder: MagicMock,
     ) -> None:
-        manager = MemoryManager(
-            config=memory_config, llm=mock_llm, embedder=mock_embedder
-        )
+        manager = MemoryManager(config=memory_config, llm=mock_llm, embedder=mock_embedder)
 
         for i in range(8):
             manager._topics.append("cooking", f"Entry {i}")
