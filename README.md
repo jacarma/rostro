@@ -95,6 +95,47 @@ avatar:
   face_pack: mycharacter
 ```
 
+## Memory System
+
+Rostro has persistent memory across conversations. It remembers conclusions, decisions, and discoveries — not obvious facts or small talk.
+
+### How it works
+
+1. **During conversation** — searches past memories by semantic similarity and tries to detect a topic (e.g. "cooking", "travel")
+2. **Topic detected** — loads the relevant topic file into context for richer responses
+3. **Inactivity timeout** (default 7 min) — extracts conclusions from the conversation via LLM, saves them, and clears history for a fresh start
+
+### Storage
+
+```
+data/
+├── memory.db              # SQLite with embeddings (semantic search)
+└── topics/
+    ├── index.txt          # Recent topics with timestamps
+    ├── cooking.md         # Topic file with conclusions
+    └── personal-intro.md  # Another topic file
+```
+
+- **Topic files** — markdown lists of conclusions per topic, human-readable. Auto-split when they grow past 50 lines.
+- **General memory** — every conclusion is stored with an embedding vector for semantic search (text-embedding-3-small).
+- **Topic index** — last 20 topics with timestamps, injected at conversation start.
+
+### Configuration
+
+In `config/default.yaml`:
+
+```yaml
+memory:
+  session_timeout_minutes: 7       # Inactivity before digestion
+  topics_dir: data/topics
+  topic_split_threshold_lines: 50  # Auto-split trigger
+  min_conclusions_for_new_topic: 3 # Min conclusions to create a topic
+  db_path: data/memory.db
+  embedding_similarity_threshold: 0.7
+  max_memories_per_search: 5
+  index_max_entries: 20
+```
+
 ## Development
 
 ```bash
@@ -125,7 +166,7 @@ rostro/
 ├── audio/          # Audio capture and playback
 ├── avatar/         # 2D rendering engine
 ├── conversation/   # Conversation management
-├── memory/         # Semantic memory (Phase 2)
+├── memory/         # Persistent memory system
 ├── providers/      # AI provider adapters
 ├── runtime/        # Main controller
 └── main.py         # Entry point
